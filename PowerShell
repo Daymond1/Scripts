@@ -1,0 +1,867 @@
+Получить всех пользователей AD в домене
+
+Get-aduser -properties * -filter *
+Модуль импорта Active Directory
+
+Import-module activedirectory
+Получить все компьютеры из домена
+
+Get-adcomputer -properties * -filter *
+Отключить пользователя AD по имени учетной записи SAM
+
+Disable-ADaccount -identity "Name"
+Экспорт данных в формат CSV
+
+Get-adcomputer -properties * -filter * |export-csv "give path"
+Получить имя учетной записи AD Groups SAM
+
+Get-ADgroup -identity "provide group name"
+Выбрать конкретный атрибут пользователя
+
+Get-aduser -properties * -filter *
+Получить информацию о домене
+
+Get-ADdomain
+Установите роль Active Directory
+
+Install-windowsfeature AD-Domain-Services
+Получить список контроллеров домена
+
+Get-ADDomainController
+Восстановление пользователей AD
+Восстановление удаленного пользователя из контроллера домена. Иногда мы сталкиваемся со многими проблемами при очистке AD, иногда мы удаляем пользователей AD, и это создает хаос среди наших пользователей. Вот решение этой проблемы.
+
+Как это работает
+Предоставляем решение этой проблемы в виде скриптов Active Directory Powershell.
+
+Вероятный результат
+После запуска этого скрипта выполните поиск пользователя в dsa.msc, он должен вернуться без потери информации. Этот скрипт очень удобно использовать, и я предпочитаю использовать его вместо GUI.
+
+AD-User Recover Powershell Scripts
+
+###### Make sure the AD recyclebin is enabled ######
+
+$Name=read-host "Enter the deleted user"
+Get-ADObject -Filter 'samaccountname -eq $name' -IncludeDeletedObjects | Restore-ADObject
+write-host "User $Name is recovered" -ForegroundColor DarkGreen
+Добавление сервера в домен
+Добавление сервера в домен, смена IP – это большая задача, которая иногда становится утомительной, так почему бы не автоматизировать ее. Скрипт работает безупречно и без каких-либо заминок. Это отличный вариант в категории скриптов Active Directory Powershell.
+
+Как это работает
+Обычно скрипт просит предоставить IP контроллера домена, что является главным требованием при добавлении сервера в домен. После этого он обычно просит указать имя домена, например xyz.com, и перезагружает сервер без предварительного запроса.
+
+Вероятный результат
+После запуска этого скрипта первым делом войдите в систему с доменными учетными данными, чтобы проверить, можете ли вы войти в систему или нет.
+
+Adding Servers into Domain Powershell Scripts
+
+## Pre-requisite:- 
+#1). Update the Primary DNS IP in the Network adapter before joining server\machine to domain by running below cmd.
+
+## For single server\machine to be added to domain. 
+
+set-DnsClientServerAddress-InterfaceIndex 2 -ServerAddresses ("Primary DNS IP address")
+set-DnsClientServerAddress -InterfaceAlias Ethernet -AddressFamily IPv4 |Select-Object ServerAddresses
+
+#Once DNS IP is updated, then execute below cmd. 
+Add-Computer -ComputerName $computers -Domain "YourDomainName" -Restart
+
+#Give your domain credentials in the credential request window. 
+
+
+
+***************************************************************************************************************************************
+
+
+
+## For multiple server\machine to be added to domain.
+
+set-DnsClientServerAddress -InterfaceIndex 2 -ServerAddresses ("Primary DNS IP address")
+set-DnsClientServerAddress -InterfaceAlias Ethernet -AddressFamily IPv4 |Select-Object ServerAddresses
+
+#Once DNS IP is updated on machines, then execute below cmd.
+
+$computers = Get-Content -Path c:\test\desktop\computers.txt
+Add-Computer -ComputerName $computers -Domain "YourDomainName" -Restart
+
+#Give your domain credentials in the credential request window.
+Передача роли FSMO
+Cкрипт просит указать предпочтение от 1 до 5, какую роль вы хотите назначить другому DC. Аналогично, если мы делаем это с помощью GUI, это долго, а через powershell это быстро и просто. В этом скрипте при успешной передаче вы получите сообщение об успешной передаче роли.
+
+Вероятный результат
+После запуска этого скрипта вы сможете перенести роли с одного DC на другой. Роли FSMO очень важны, поэтому делайте это очень осторожно.
+
+FSMO Role Transfer Powershell Scripts
+
+#Provide the destination DC in which you want to transfer the fsmo role
+$destinationdc= Read-Host "Provide the Destination domain controller" 
+
+#Choose the role you want to transfer
+$role=read-host "Choose the role"
+Switch($role)
+{
+
+1 { $result = 'DomainNamingMaster'}
+2 { $result = 'PDCEmulator'}
+3 { $result = 'RIDMaster'}
+4 { $result = 'SchemaMaster'}
+5 { $result = 'InfrastructureMaster'}
+6 {$result = 'All'}
+}
+
+if($role -gt 6)
+
+{
+Write-host "Choose correct option" -ForegroundColor Cyan
+
+}
+
+#This will transfer DomainNamingMaster role to destination server
+if ($role -eq 1)
+{
+
+ Move-ADDirectoryServerOperationMasterRole -OperationMasterRole DomainNamingMaster -Identity $destinationDc -confirm:$false
+
+ Write-host "$result is transferred successfully to $destinationDc" -ForegroundColor DarkGreen -BackgroundColor Cyan
+
+ netdom query fsmo |Select-String "Domain Naming Master" 
+}
+
+#This will transfer PDCEmulator role to destination server
+ if ($role -eq 2)
+{
+
+ Move-ADDirectoryServerOperationMasterRole -OperationMasterRole PDCEmulator -Identity $destinationDc -confirm:$false
+
+ Write-host "$result is transferred successfully to $destinationDc" -ForegroundColor DarkGreen -BackgroundColor Cyan
+
+ netdom query fsmo |Select-String "PDC" 
+}
+
+#This will transfer RID pool manager role to destination server
+ if ($role -eq 3)
+{
+
+ Move-ADDirectoryServerOperationMasterRole -OperationMasterRole RIDMaster -Identity $destinationDc -confirm:$false
+
+ Write-host "$result is transferred successfully to $destinationDc" -ForegroundColor DarkGreen -BackgroundColor Cyan
+
+ netdom query fsmo |Select-String "RID pool manager" 
+}
+
+#This will transfer Schema Master role to destination server
+ if ($role -eq 4)
+{
+
+ Move-ADDirectoryServerOperationMasterRole -OperationMasterRole SchemaMaster -Identity $destinationDc -confirm:$false
+
+ Write-host "$result is transferred successfully to $destinationDc" -ForegroundColor DarkGreen -BackgroundColor Cyan
+
+ netdom query fsmo |Select-String "Schema Master" 
+}
+
+#This will transfer Infrastructure Master role to destination server
+ if ($role -eq 5)
+{
+
+ Move-ADDirectoryServerOperationMasterRole -OperationMasterRole InfrastructureMaster -Identity $destinationDc -Credential  -confirm:$false
+
+ Write-host "$result is transferred successfully to $destinationDc" -ForegroundColor DarkGreen -BackgroundColor Cyan
+
+ netdom query fsmo |Select-String "Infrastructure Master" 
+}
+
+#This will transfer All roles to destination server
+ if ($role -eq 6)
+{
+
+ Move-ADDirectoryServerOperationMasterRole -OperationMasterRole DomainNamingMaster,PDCEmulator,RIDMaster,SchemaMaster,InfrastructureMaster -Identity $destinationDc  -confirm:$false 
+
+ Write-host "$result roles are transferred successfully to $destinationDc" -ForegroundColor DarkGreen -BackgroundColor Cyan
+
+ netdom query fsmo  
+}
+Отключение неактивных пользователей в AD
+Отключение пользователей AD – это ежемесячная работа, и ее может быть трудно выполнить через графический интерфейс, если пользователей много. Я предлагаю вам сценарий, в котором вы можете отключить большое количество пользователей с помощью Powershell.
+
+Как это работает
+Скрипт запросит идентификатор пользователя, которого вы хотите отключить, а для массового отключения потребуется список пользователей, и он будет идентифицировать, используя учетную запись Sam. Выглядит просто, если использовать powershell, то да, это очень просто.
+
+Disable Active directory User Powershell Scripts
+
+#Wintel-AD-Disable Active Directory User:
+
+#for single:
+Import-Module ActiveDirectory
+Disable-ADAccount -Identity user1
+
+#for bulk:
+
+#imports active directory module to only corrent session as it is related to AD
+
+Import-Module ActiveDirectory
+
+#Takes input from users.csv file into this script
+
+Import-Csv "C:\Users.csv" | ForEach-Object {
+
+#assign input value to variable-samAccountName 
+
+$samAccountName = $_."samAccountName"
+
+#get-aduser will retrieve samAccountName from domain users. if we found it will disable else it will go to catch
+
+try { Get-ADUser -Identity $samAccountName |
+Disable-ADAccount  
+}
+
+#It will run when we can't find user
+
+catch {
+
+#it will display the message
+
+  Write-Host "user:"$samAccountname "is not present in AD"
+}
+}
+Отчет по неактивным пользователям
+Во время аудита вам будет предложено предоставить список пользователей, которые не используют свои компьютеры или не заходят в систему в течение определенного периода времени, так вот, этот скрипт делает то же самое и значительно упрощает задачу.
+
+Как это работает
+Скрипт собирает данные о тех, кто не заходил в систему в течение определенного времени, например, 90 дней, и отправляет нам почту. Убедитесь, что у вас указан правильный SMTP, чтобы вы могли получать почту.
+
+Вероятный результат
+Скрипт покажет вам результаты неактивных пользователей, которые не заходили в систему в течение указанного периода времени.
+
+AD-InActive Users Report-90 Days Powershell Scripts
+
+#Imports active directory module to only current session
+Import-Module activedirectory
+
+#Get-Date gives the present date in the server and is assigned to the variable presentdate
+$presentdate= Get-Date
+
+#User names whose lastlogondate is less than the presentdate-90days and those usernames are given to the variable output 
+$output=Get-ADUser -Filter * -Properties lastlogondate | Where-Object {$_.lastlogondate -lt $presentdate.adddays(-90)} | select name
+
+#This output is exported to a .csv file 
+$output | Export-Csv C:\inactiveusers.csv -NoTypeInformation
+
+#This prints the users who are inactive by taking from the output
+Write-Host "The following users are inactive : " -ForegroundColor DarkYellow
+$output
+Получение сведений о компьютерах AD в CSV
+Как это работает
+Скрипт получает список компьютеров в окружении и экспортирует его в csv.
+
+Вероятный результат
+Мы можем получить файл csv со списком компьютеров.
+
+AD computers to csv Powershell Scripts
+
+get-adcomputer -properties* -filter * | export-csv "provide path"
+Включить AD Recylcebin
+Включение recyclebin в AD является обязательным условием, если вы не хотите потерять информацию об удаленном пользователе. Преимущество включения этой функции в том, что мы можем легко восстановить любого пользователя в несколько кликов или с помощью скрипта.
+
+Как это работает
+Это просто набор команд для включения корзины, не используя настройки Windows. Скрипт прост и может быть выполнен без каких-либо проблем.
+
+Вероятный результат
+После выполнения скрипта вы можете проверить в ADUC, включен ли он, а также проверить, что показывает вывод после выполнения сценария.
+
+Enable Recycle bin Powershell Scripts
+
+$domain= read-host "Provide the domain name"
+$DCserver = read-host "Provide DC server name"
+Enable-ADOptionalFeature -Identity 'Recycle Bin Feature' -Scope ForestOrConfigurationSet -Target $domain -Server $DCserver -Confirm:$false
+Удаление объектов AD
+Объектом AD может быть компьютер или пользователь, и этот скрипт предоставляет вам возможность удалить пользователя и его машину из окружения. Больше не нужно идти и удалять пользователя/компьютер из GUI.
+
+Как это работает
+Этот скрипт использует переключатель, чтобы вы могли выбрать правильный вариант между удалением пользователя или компьютера, удаляет выбранный вариант и показывает результат на экране.
+
+Вероятный результат
+Пользователь или компьютер будет удален из домена AD.
+
+AD-object-deletion Powershell Scripts
+
+#Provide the input to choose to delete either User and Computer
+
+$input = read-host "Enter your choice"
+Switch($input)
+{
+0 { $result = 'User Deletion'}
+1 { $result = 'Computer Deletion'}
+
+}
+
+#If input is greater than 1 it will throw error.
+
+if ($input -gt 1)
+
+{
+Write-host "$input is not mentioned in the provided choices"  -ForegroundColor Cyan
+
+}
+
+#If 0 is selected then provide the user name that needs to deleted.
+
+if($input -eq 0)
+{
+$user = Read-host "Provide user Name" 
+Try{
+Remove-aduser $user -confirm:$false 
+
+Write-host "User $user is deleted" -foregroundcolor DarkGreen}
+
+Catch{
+
+Write-host "$user is not present in AD or the Username is incorrect" -Foregroundcolor DarkRed 
+}
+}
+#If 1 is selected then provide the computer name that needs to deleted.
+
+if ($input -eq 1)
+
+{
+
+$computer = Read-host "Provide Computer Name"
+
+Try{
+Remove-ADComputer $computer -confirm:$false 
+
+
+Write-host "User $computer is deleted" -BackgroundColor DarkGreen}
+
+Catch{
+
+Write-host "$Computer is not present in AD or the Computer name is incorrect" -BackgroundColor DarkRed 
+}
+
+}
+Создание нескольких групп AD
+Создайте несколько групп AD за один запуск. Просто укажите данные из CSV, скрипт получит результаты и создаст необходимые группы AD. Один из самых популярных скриптов, на который стоит обратить внимание.
+
+Как это работает
+Сценарий получает данные из CSV-файла и создает необходимую группу под определенным OU.
+
+Вероятный результат
+Группы AD будут созданы автоматически без каких-либо ручных операций по проверке. Просто предоставьте необходимые данные.
+
+Create Multiple AD Groups Powershell Scripts
+
+#\\\\\\\Create multiple AD Groups///////#
+
+$csv = Import-csv -Path "C:\Users\test\Desktop\groups.csv"
+$name=$item.GroupName
+
+Foreach ($item in $csv)
+{
+
+    try
+{ 
+      
+    New-ADGroup -Name $item.GroupName -GroupCategory $item.GroupCategory -groupScope $item.groupScope -Path $item.OU
+    Write-Host -ForeGroundColor Green "Group $($item.GroupName) created!"
+
+}
+
+catch
+{
+
+Write-Host "Group already exists $name"
+
+}
+
+}
+Получение данных о пользователях AD в CSV
+Сбор данных о пользователях AD – это ежемесячный процесс, который используется при проведении аудита. Получение информации о пользователях AD – это то, к чему стремится каждая организация. Это простой скрипт для получения всех данных о пользователях.
+
+Как это работает
+После запуска скрипта он сохранит все данные о пользователях в файл формата csv.
+
+Вероятный результат
+Вы можете определить, требуется ли какая-либо выборка по дате последнего входа в систему и другие атрибуты.
+
+AD user to csv Powershell Scripts
+
+get-aduser -properties* -filter * | export-csv "provide path"
+ADuser – Memberof – WhenCreated
+Как это работает
+Этот скрипт проверяет пользователя и членство, которое он имеет, а также получает дату создания учетной записи пользователя.
+
+Вероятный результат
+Вы получите представление о том, в какой группе состоит пользователь и когда он был создан в домене.
+
+AD-when-created-memberof Powershell Scripts
+
+$a=(Get-aduser -filter * -properties *).Name
+foreach($b in $a){
+$c=(Get-aduser -identity $b -properties *).Whencreated
+$d=((Get-aduser -identity $b -properties *).memberof|Get-Adgroup).Name -join ','
+
+write-host "$b | $c | $d "
+
+}
+Дата последней установки пароля
+Дата последней установки пароля не может быть получена непосредственно из powershell, нам необходимо несколько изменить скрипт. Если вы попытаетесь получить дату последней установки пароля, она покажет дату в 1601 году. Поэтому я создал скрипт для получения даты последнего пароля заданного samaccount.
+
+Как это работает
+Сценарий получает атрибут последнего установленного пароля пользователя и изменяет его на правильную дату. Список пользователей может быть предоставлен с помощью файла txt.
+
+Вероятный результат
+Скрипт получит атрибут последнего установленного пароля пользователя и изменяет его на правильную дату. Список пользователей может быть предоставлен с помощью txt-документа.
+
+Last password set Powershell Scripts
+
+$a="Provide path for list of user in txt doc"
+foreach($b in $a){
+$g=get-aduser -Identity $b -Properties Name,pwdlastset
+$date=[datetime]$g.pwdLastSet
+$pwdlast =$date.AddYears(1600).ToLocalTime()
+"$b,$pwdlast"}
+Создание OU Разовое и массовое
+Для создания OU без каких-либо дополнительных шагов, я подготовил скрипт. Он создает одну OU или в нужном количестве.
+
+Как это работает
+Создание OU – это одна команда в Powershell, но массовое создание требует данных, которые могут быть представлены в CSV или текстовом файле, что и делается в этом скрипте.
+
+Вероятный результат
+Если вы все сделаете правильно, вы сможете увидеть созданные OU в dsa.msc.
+
+Create OU Powershell Scripts
+
+create active directory OU.txt
+
+#Wintel-AD-Create Active Directory OU:
+
+for single:
+-----------
+New-ADOrganizationalUnit -Name abc -Path "OU=Employees,DC=contoso,DC=com" -Description "if any" -PassThru
+
+
+For Bulk:
+---------
+
+#Take input from ou_names file 
+import-csv c:\ou_names.csv | ForEach-Object {
+
+#Assign input values to variable-ouname
+ $ouname = $_."ouname"
+ 
+ #It will search for given OU already exists in AD
+  $ADOU=get-ADOrganizationalunit -Filter 'Name -like $ouname'
+ 
+ try{
+
+ #It will compare given OU and AD searched OU
+if($ouname -eq $ADOU){
+
+#If it already in AD, it will go to caught statement
+write-host "given OU-" $ouname "is already there in AD"}
+
+#It will create OU if not exits
+else
+{
+ New-ADOrganizationalUnit -Name $ouname -path "DC=contoso,DC=com" -PassThru
+}
+}
+
+#It will show the path of OU which already exists
+catch{
+write-host $ouname "is exists in AD"
+write-host $ADOU
+}
+}
+ou_names.csv
+
+ouname
+ou1
+ou2
+ou3
+ou4
+ou5
+readme.txt
+
+This script will create OU's in AD.
+
+Prerequisites:
+
+1.We should provide the OU names which needs to created in AD.
+
+Steps to run the script:
+
+1.Provide OU names in csv file to script.
+2.It will check for OU in AD whether it already exists.
+3.If it doesn't exist in AD, it will create else it will provide path od OU.
+Разовое удаление пользователей AD или массовое
+Нужно удалить пользователя без каких-либо дополнительных кликов, данный скрипт именно для этого. Вы можете удалить одного пользователя или удалить пользователей в массовом порядке.
+
+Как это работает
+Удаление пользователя – это отдельная команда в Powershell, но для массового удаления требуются данные, которые могут быть получены их CSV или текстового файла, что и делается в этом скрипте.
+
+Вероятный результат
+Если вы все сделаете правильно, то удаленные пользователи не будут видны в dsa.msc.
+
+Delete-user-account Powershell Scripts
+
+Delete Active Directory User.txt
+
+#Wintel-AD-Disable Active Directory User:
+
+#for single:
+Import-Module ActiveDirectory
+Remove-ADAccount -Identity user1
+
+###################for bulk################################
+
+#imports active directory module to only corrent session as it is related to AD
+
+Import-Module ActiveDirectory
+
+#Takes input from users.csv file into this script
+
+Import-Csv "C:\Users.csv" | ForEach-Object {
+
+#assign input value to variable-samAccountName 
+
+$samAccountName = $_."samAccountName"
+
+#get-aduser will retrieve samAccountName from domain users. if we found it will disable else it will go to catch
+
+try { Get-ADUser -Identity $samAccountName |
+Remove-ADAccount  
+}
+
+#It will run when we can't find user
+
+catch {
+
+#it will display the message
+
+  Write-Host "user:"$samAccountname "is not present in AD"
+}
+}
+users.csv
+
+samAccountName
+akhila
+user1
+readme.txt
+
+This script will disable particularly given user accounts in AD.
+
+Prerequisites:
+
+1.We should provide the user accounts which are in AD.
+
+Steps to run the script:
+
+1.Provide user names in csv file to script.
+2.It will check for user in AD.
+3.if it is there, it will disable else it will provide a message like user is not present in AD.
+Статус репликации AD
+Если вы хотите узнать статус репликации AD в вашем домене, этот скрипт является наиболее подходящим для этого. Он предоставляет статус репликации и, если есть какая-либо ошибка, показывает ее.
+
+Как это работает
+Он похож на repadmin/replsum и выдает тот же результат в формате html.
+
+Вероятный результат
+Вы можете запланировать выполнение этого скрипта на регулярной основе, если возникнут ошибки, вы сможете проверить и устранить их.
+
+AD-Replication-status Powershell Scripts
+
+$myRepInfo = @(repadmin /replsum * /bysrc /bydest /sort:delta)
+ 
+# Initialize our array.
+$cleanRepInfo = @()
+   # Start @ #10 because all the previous lines are junk formatting
+   # and strip off the last 4 lines because they are not needed.
+    for ($i=10; $i -lt ($myRepInfo.Count-4); $i++) {
+            if($myRepInfo[$i] -ne ""){
+            # Remove empty lines from our array.
+            $myRepInfo[$i] -replace '\s+', " "           
+            $cleanRepInfo += $myRepInfo[$i]            
+            }
+            }           
+$finalRepInfo = @()  
+            foreach ($line in $cleanRepInfo) {
+            $splitRepInfo = $line -split '\s+',8
+            if ($splitRepInfo[0] -eq "Source") { $repType = "Source" }
+            if ($splitRepInfo[0] -eq "Destination") { $repType = "Destination" }
+           
+            if ($splitRepInfo[1] -notmatch "DSA") {      
+            # Create an Object and populate it with our values.
+           $objRepValues = New-Object System.Object
+               $objRepValues | Add-Member -type NoteProperty -name DSAType -value $repType # Source or Destination DSA
+               $objRepValues | Add-Member -type NoteProperty -name Hostname  -value $splitRepInfo[1] # Hostname
+               $objRepValues | Add-Member -type NoteProperty -name Delta  -value $splitRepInfo[2] # Largest Delta
+               $objRepValues | Add-Member -type NoteProperty -name Fails -value $splitRepInfo[3] # Failures
+               #$objRepValues | Add-Member -type NoteProperty -name Slash  -value $splitRepInfo[4] # Slash char
+               $objRepValues | Add-Member -type NoteProperty -name Total -value $splitRepInfo[5] # Totals
+               $objRepValues | Add-Member -type NoteProperty -name "% Error"  -value $splitRepInfo[6] # % errors  
+               $objRepValues | Add-Member -type NoteProperty -name ErrorMsg  -value $splitRepInfo[7] # Error code
+          
+            # Add the Object as a row to our array   
+            $finalRepInfo += $objRepValues
+           
+            }
+            }
+$html = $finalRepInfo|ConvertTo-Html -Fragment       
+           
+$xml = [xml]$html
+
+$attr = $xml.CreateAttribute("id")
+$attr.Value='diskTbl'
+$xml.table.Attributes.Append($attr)
+
+
+$rows=$xml.table.selectNodes('//tr')
+for($i=1;$i -lt $rows.count; $i++){
+    $value=$rows.Item($i).LastChild.'#text'
+    if($value -ne $null){
+       $attr=$xml.CreateAttribute('style')
+       $attr.Value='background-color: red;'
+       [void]$rows.Item($i).Attributes.Append($attr)
+    }
+   
+    else {
+       $value
+       $attr=$xml.CreateAttribute('style')
+       $attr.Value='background-color: green;'
+       [void]$rows.Item($i).Attributes.Append($attr)
+    }
+}
+
+#embed a CSS stylesheet in the html header
+$html=$xml.OuterXml|Out-String
+$style='<style type=text/css>#diskTbl { background-color:black ; } 
+td, th { border:1px solid black; border-collapse:collapse; }
+th { color:black; background-color:yellow; }
+table, tr, td, th { padding: 2px; margin: 0px } table { margin-left:50px; }</style>'
+
+
+ConvertTo-Html -head $style -body $html -Title " AD Replication Report"|Out-File C:\Scripts_new\Replication\ReplicationReport.htm
+
+$html1=get-content C:\Scripts_new\Replication\ReplicationReport.htm
+$smtpServer = ""
+$smtpFrom = ""
+$smtpTo = ""
+$messageSubject = ""
+ 
+$message = New-Object System.Net.Mail.MailMessage $smtpfrom, $smtpto
+$message.Subject = $messageSubject
+$message.IsBodyHTML = $true
+ 
+$message.Body =$html1
+ 
+$smtp = New-Object Net.Mail.SmtpClient($smtpServer)
+$smtp.Send($message)
+
+#send-MailMessage  -From "Replication@lycra.mail.onmicrosoft.com" -to "dhrub.bharali@capgemini.com" -Subject "Lycra AD Replication Report(Do not reply)" -SmtpServer "lycra-com.mail.protection.outlook.com" -body  -BodyAsHtml
+Отчет об устаревших объектах
+Хотите узнать, какие объекты еще присутствуют в вашем домене, тогда это отличный скрипт, который найдет их и поможет вам полностью создать объекты. Это самый интересный скрипт в категории скриптов Active Directory Powershell.
+
+Как он работает
+С помощью этого скрипта можно найти неиспользуемые объекты в течение определенного промежутка времени.
+
+Вероятный результат
+Вы можете удалить неиспользуемые объекты, если они соответствуют вашим критериям поиска.
+
+Stale comp reports Powershell Scripts
+
+###############################################
+
+#Description:
+#This script will fetch stale computer objects beyond 90 days . And should run in any of the AD servers.
+################################################################################################
+
+#FIND INACTIVE COMPUTERS
+#-------------------------------
+
+Import-Module ActiveDirectory
+
+#Get AD Computers that haven't logged on in xx days
+
+$DaysInactive = 90
+$InactiveDate = (Get-Date).Adddays(-($DaysInactive))
+$Computers = Get-ADComputer -Filter { LastLogonDate -lt $InactiveDate -and Enabled -eq $true } -Properties LastLogonDate | Select-Object Name, LastLogonDate, DistinguishedName
+
+
+# REPORTING
+#-------------------------------
+# Export results to CSV
+
+$Computers | Export-Csv C:\Users\test\Desktop\InactiveComputers.csv -NoTypeInformation
+Добавление или удаление нескольких пользователей из нескольких групп
+Как это работает
+Скрипт использует файл csv для получения входных данных и выполняет их в вашей среде.
+
+
+
+Вероятный результат
+После выполнения скрипта вероятным результатом будет удаление пользователя или добавление его в необходимую группу безопасности.
+
+Multiple user remove from groups Powershell Scripts
+
+{<######### CSV format ########## >
+user,group
+test1,"domain admins"
+test2,Administrators #>}
+
+
+Import-CSV c:\users\dbharali\desktop\list.csv | % { 
+$check1= Get-ADGroupMember -Identity ($_.group) | select -ExpandProperty Name
+
+if ($check1 -contains $_.user){
+write-host "$($_.User) is a member of $($_.Group) !" -ForegroundColor DarkYellow
+
+try{
+
+ 
+remove-ADGroupMember -Identity $_.group -Member $_.User -Confirm:$false
+
+Write-host "Removing $($_.User) from $($_.Group)..........   " -ForegroundColor cyan
+$check2 = Get-ADGroupMember -Identity ($_.group) | select -ExpandProperty Name
+
+if ($check2 -notcontains $_.user){
+write-host "$($_.User) is successfully removed from $($_.Group) !" -ForegroundColor green
+}
+
+}
+catch{
+Write-Warning "Exception String: $($_.Exception.Message)"
+
+}
+
+}
+
+else {
+
+Write-host $($_.user) is not a member of $($_.group) -ForegroundColor red
+
+}
+}
+Add multiple user to multiple groups Powershell Scripts
+
+{<######### CSV format ########## >
+user,group
+test1,"domain admins"
+test2,Administrators #>}
+
+
+$ErrorActionPreference = "SilentlyContinue"
+Import-CSV c:\users\dbharali\desktop\list.csv | % { 
+$check1= Get-ADGroupMember -Identity ($_.group) | select -ExpandProperty Name
+
+if ($check1 -contains $_.user){
+write-host "$($_.User) is already a member of $($_.Group) !" -ForegroundColor red
+}
+
+else
+
+{
+Try{
+ Write-host "Checking $($_.Users) in $($_.Group)..........  " -ForegroundColor cyan
+Add-ADGroupMember -Identity $_.group -Member $_.User -ErrorAction SilentlyContinue
+
+
+$check2 = Get-ADGroupMember -Identity ($_.group) | select -ExpandProperty Name
+
+if ($check2 -contains $_.user){
+write-host "$($_.User) is successfully added to $($_.Group) !" -ForegroundColor green
+}
+
+}
+
+catch{
+Write-Warning "Exception String: $($_.Exception.Message)"
+}
+}
+
+}
+Получение источника NTP из нескольких серверов
+Когда мы сталкиваемся с проблемой синхронизации времени, лучше проверить источник, из которого сервер получает время.
+
+Как он работает
+Он считывает введенный список серверов и пытается найти источник NTP из предоставленного списка.
+
+Вероятный результат
+Считывает входные данные списка серверов и пытается найти источник NTP из предоставленного списка.
+
+NTP Source Powershell Scripts
+
+$Inventory = New-Object System.Collections.ArrayList
+$AllComputers = gc C:\users\admin\desktop\server.txt
+foreach($computers in $allcomputers){
+$Computers
+$ComputerInfo = New-Object System.Object
+$ntp = w32tm /query /computer:$computers /source
+
+$ComputerInfo |Add-Member -MemberType NoteProperty -Name "ServerName" -Value "$Computers" 
+
+$ComputerInfo |Add-Member -MemberType NoteProperty -Name "NTP Source" -Value "$Ntp" 
+
+
+$Inventory.Add($ComputerInfo) | Out-Null
+  }
+
+$Inventory | Export-Csv C:\users\admin\desktop\NTP.csv -NoTypeInformation
+Сравнение групп AD
+Иногда это превращается в сложную задачу, когда вам нужно сравнить две группы AD и найти ту, в которой отсутствует один пользователь из-за того, что несколько пользователей добавлены в определенные группы. Я создал простой скрипт, чтобы сэкономить время, поэтому делюсь им с вами.
+
+Как это работает
+Сценарий сравнивает 2 предоставленные группы и показывает, чего не хватает в этих двух группах. Если значение показывает “==”, значит пользователь есть в обеих группах, если “=>” или “<=”, значит некоторые пользователи отсутствуют в одной из групп.
+
+Вероятный результат
+С помощью скрипта вы узнаете, какой пользователь отсутствует или какая группа безопасности отсутствует.
+
+Compare ad groups Powershell Scripts
+
+$group1 = read-host "Enter  group 1"
+$group2 = read-host "Enter  group 2"
+
+$a= get-adgroupmember -identity $group1 |select -expandproperty Name
+$b= get-adgroupmember -identity $group2 |select -expandproperty Name
+
+compare $b $a -includeequal
+Зеркальные группы AD
+Вы когда-нибудь думали о том, как добавить похожих пользователей в разные группы, чтобы они были зеркальным отражением друг друга? Этого можно легко добиться с помощью Powershell и сэкономить массу драгоценного времени.
+
+Как это работает
+Сценарий получает список пользователей из обеих групп AD, и если в целевой группе AD отсутствует член эталонной группы AD, то пользователь будет добавлен в целевую группу.
+
+Вероятный результат
+Обе группы AD – эталонная и целевая – будут иметь одинаковых членов.
+
+Add missing AD group members Powershell Scripts
+
+$group1 = read-host "Enter  group 1"
+$group2 = read-host "Enter  group 2"
+
+$a= get-adgroupmember -identity $group1 |select -expandproperty Name
+write-host "$group1 members are $a"
+$b= get-adgroupmember -identity $group2 |select -expandproperty Name
+write-host "$group2 members are $b"
+
+Foreach($c in $a)
+{
+Foreach($d in $b)
+{
+
+if ($c -notcontains $d)
+
+{
+write-host "adding $c to $group2"
+add-adgroupmember -members $c -identity $group2
+write-host "$c is added to $group2"
+}
+
+else
+{write-host "$c is not copied"}
+
+}
+}
+
+write-host "$group2 members are"
+get-adgroupmember -identity $group2 |select -expandproperty Name
